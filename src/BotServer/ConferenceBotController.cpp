@@ -32,6 +32,7 @@ void ConferenceBotController::registerHandlers() {
         drogon::async_run([this, query] {
             return _checkSubscriptionWorkflow.checkSubscription(query, _config.channelId);
         });
+        LOG_DEBUG << "[controller] Check subscription callback routed";
       }
   );
 
@@ -42,6 +43,7 @@ void ConferenceBotController::registerHandlers() {
         drogon::async_run([this, query] {
           return _registrationWorkflow.answerWantParticipateQuery(query);
         });
+        LOG_DEBUG << "[controller] Want participate callback routed";
       }
   );
 
@@ -52,15 +54,18 @@ void ConferenceBotController::registerHandlers() {
         drogon::async_run([this, query] {
           return _registrationWorkflow.replyBackQuery(query);
         });
+        LOG_DEBUG << "[controller] Form back callback routed";
       }
   );
 
   _commandRouter.registerCommand(
       Commands::Start,
       [this](const TgBot::Message::Ptr message) {
+        LOG_DEBUG << "[controller] Routing 'start' command";
         drogon::async_run([this, message] {
           return _startWorkflow.replyStartCommand(message->chat->id);
         });
+        LOG_DEBUG << "[controller] Start command routed";
       }
   );
 
