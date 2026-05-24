@@ -7,6 +7,8 @@
 #include <ConferenceBot/Services/RegistrationState.hpp>
 #include <Registrations.h>
 
+#include <drogon/drogon.h>
+
 namespace ConferenceBot {
 namespace {
 
@@ -16,8 +18,12 @@ drogon::Task<void> showFormPrompt(
     int64_t chatId,
     RegistrationState state
 ) {
+  LOG_INFO << "[registration] showFormPrompt chat=" << chatId
+           << " state=" << rawValue(state);
   auto row = co_await repository.findByChatId(chatId);
   if (!row) {
+    LOG_WARN << "[registration] showFormPrompt: no registration row for chat="
+             << chatId;
     co_return;
   }
 
@@ -63,64 +69,92 @@ drogon::Task<void> RegistrationWorkflow::answerWantParticipateQuery(
 ) {
   assert(this);
   assert(&_bot);
-  _bot.getApi().answerCallbackQuery(query->id);
-  _bot.getApi().editMessageReplyMarkup(
-      query->message->chat->id,
-      query->message->messageId,
-      query->inlineMessageId,
-      nullptr
-  );
-  _bot.getApi().sendMessage(
-      query->message->chat->id,
-      std::string(Strings::ContestDescriptionMessageText),
-      nullptr,
-      nullptr,
-      nullptr,
-      "HTML"
-  );
+  const int64_t chatId = query->message->chat->id;
+  const int64_t userId = query->from ? query->from->id : 0;
+  LOG_INFO << "[registration] 'want participate' chat=" << chatId
+           << " user=" << userId
+           << " (@" << (query->from ? query->from->username : "") << ")";
 
-  std::vector<TgBot::InputMedia::Ptr> documents;
+  try {
+    _bot.getApi().answerCallbackQuery(query->id);
+    _bot.getApi().editMessageReplyMarkup(
+        chatId,
+        query->message->messageId,
+        query->inlineMessageId,
+        nullptr
+    );
+    _bot.getApi().sendMessage(
+        chatId,
+        std::string(Strings::ContestDescriptionMessageText),
+        nullptr,
+        nullptr,
+        nullptr,
+        "HTML"
+    );
 
-  std::ranges::transform(
-      Constants::CONTEST_FILE_IDS,
-      std::back_inserter(documents),
-      [](const auto &fileId) {
-        auto document = std::make_shared<TgBot::InputMediaDocument>();
-        document->media = fileId;
-        return document;
-      }
-  );
+    std::vector<TgBot::InputMedia::Ptr> documents;
+    std::ranges::transform(
+        Constants::CONTEST_FILE_IDS,
+        std::back_inserter(documents),
+        [](const auto &fileId) {
+          auto document = std::make_shared<TgBot::InputMediaDocument>();
+          document->media = fileId;
+          return document;
+        }
+    );
 
-  _bot.getApi().sendMediaGroup(query->message->chat->id, documents);
+    _bot.getApi().sendMediaGroup(chatId, documents);
+    LOG_DEBUG << "[registration] Sent contest media group (count="
+              << documents.size() << ") to chat=" << chatId;
 
-  co_await requestFullName(query->message->chat->id, query->from->username);
+    co_await requestFullName(chatId, query->from->username);
+  } catch (const TgBot::TgException &e) {
+    LOG_ERROR << "[registration] Telegram error in answerWantParticipateQuery"
+              << " chat=" << chatId << ": " << e.what();
+  }
 }
 
 drogon::Task<void>
 RegistrationWorkflow::processMessage(TgBot::Message::Ptr message) {
   using enum ConferenceBot::RegistrationState;
 
-  auto row = co_await _repository.findByChatId(message->chat->id);
+  const int64_t chatId = message->chat->id;
+  auto row = co_await _repository.findByChatId(chatId);
   if (!row) {
+    LOG_DEBUG << "[registration] processMessage: no row for chat=" << chatId
+              << " - ignoring";
     co_return;
   }
 
-  RegistrationState state = getState(*row);
+  RegistrationState state;
+  try {
+    state = getState(*row);
+  } catch (const std::exception &e) {
+    LOG_ERROR << "[registration] Invalid state for chat=" << chatId
+              << " raw=" << row->getValueOfState() << ": " << e.what();
+    co_return;
+  }
+
+  LOG_INFO << "[registration] processMessage chat=" << chatId
+           << " state=" << rawValue(state)
+           << " textLen=" << message->text.size();
 
   switch (state) {
   case WaitingName:
-    co_await saveFullName(message->chat->id, message->text);
+    co_await saveFullName(chatId, message->text);
     break;
   case WaitingCompanyName:
-    co_await saveCompanyName(message->chat->id, message->text);
+    co_await saveCompanyName(chatId, message->text);
     break;
   case WaitingCompanyPosition:
-    co_await saveCompanyPosition(message->chat->id, message->text);
+    co_await saveCompanyPosition(chatId, message->text);
     break;
   case WaitingPhrase:
-    co_await savePhrase(message->chat->id, message->text);
+    co_await savePhrase(chatId, message->text);
     break;
   case Completed:
+    LOG_DEBUG << "[registration] processMessage chat=" << chatId
+              << " already Completed - ignoring";
     co_return;
   }
 }
@@ -128,18 +162,24 @@ RegistrationWorkflow::processMessage(TgBot::Message::Ptr message) {
 drogon::Task<void>
 RegistrationWorkflow::replyBackQuery(TgBot::CallbackQuery::Ptr query) {
   using enum RegistrationState;
-  auto row = co_await _repository.findByChatId(query->message->chat->id);
+  const int64_t chatId = query->message->chat->id;
+  auto row = co_await _repository.findByChatId(chatId);
 
   if (!row) {
+    LOG_WARN << "[registration] replyBackQuery: no row for chat=" << chatId;
     co_return;
   }
 
   RegistrationState state = getState(*row);
   if (!canGoBack(state)) {
+    LOG_DEBUG << "[registration] replyBackQuery: cannot go back from state="
+              << rawValue(state) << " chat=" << chatId;
     co_return;
   }
 
   RegistrationState newState = prev(state);
+  LOG_INFO << "[registration] Going back chat=" << chatId << " from="
+           << rawValue(state) << " to=" << rawValue(newState);
   row->setState(rawValue(newState));
   switch (newState) {
   case WaitingName:
@@ -168,6 +208,9 @@ drogon::Task<void> RegistrationWorkflow::resumeRegistration(
 
 drogon::Task<void>
 RegistrationWorkflow::requestFullName(int64_t chatId, std::string username) {
+  LOG_INFO << "[registration] Creating new registration chat=" << chatId
+           << " username=@" << username;
+
   drogon_model::sqlite3::Registrations model;
   model.setChatId(chatId);
   model.setState(rawValue(RegistrationState::WaitingName));
@@ -183,6 +226,8 @@ RegistrationWorkflow::requestFullName(int64_t chatId, std::string username) {
   row.setMessageId(message->messageId);
 
   co_await _repository.update(row);
+  LOG_DEBUG << "[registration] Prompted for full name chat=" << chatId
+            << " messageId=" << message->messageId;
 }
 
 drogon::Task<void> RegistrationWorkflow::requestCompanyName(int64_t chatId) {
@@ -217,9 +262,13 @@ drogon::Task<void>
 RegistrationWorkflow::saveFullName(int64_t chatId, std::string fullName) {
   auto row = co_await _repository.findByChatId(chatId);
   if (!row || getState(*row) != RegistrationState::WaitingName) {
+    LOG_WARN << "[registration] saveFullName: invalid state for chat="
+             << chatId;
     co_return;
   }
 
+  LOG_INFO << "[registration] Saved name chat=" << chatId
+           << " len=" << fullName.size();
   row->setName(std::move(fullName));
   co_await _repository.update(*row);
   co_await requestCompanyName(chatId);
@@ -229,9 +278,13 @@ drogon::Task<void>
 RegistrationWorkflow::saveCompanyName(int64_t chatId, std::string companyName) {
   auto row = co_await _repository.findByChatId(chatId);
   if (!row || getState(*row) != RegistrationState::WaitingCompanyName) {
+    LOG_WARN << "[registration] saveCompanyName: invalid state for chat="
+             << chatId;
     co_return;
   }
 
+  LOG_INFO << "[registration] Saved company chat=" << chatId
+           << " len=" << companyName.size();
   row->setCompany(std::move(companyName));
   co_await _repository.update(*row);
   co_await requestCompanyPosition(chatId);
@@ -243,9 +296,13 @@ drogon::Task<void> RegistrationWorkflow::saveCompanyPosition(
 ) {
   auto row = co_await _repository.findByChatId(chatId);
   if (!row || getState(*row) != RegistrationState::WaitingCompanyPosition) {
+    LOG_WARN << "[registration] saveCompanyPosition: invalid state for chat="
+             << chatId;
     co_return;
   }
 
+  LOG_INFO << "[registration] Saved company position chat=" << chatId
+           << " len=" << companyPosition.size();
   row->setCompanyPosition(std::move(companyPosition));
   co_await _repository.update(*row);
   co_await requestPhrase(chatId);
@@ -255,9 +312,13 @@ drogon::Task<void>
 RegistrationWorkflow::savePhrase(int64_t chatId, std::string phrase) {
   auto row = co_await _repository.findByChatId(chatId);
   if (!row || getState(*row) != RegistrationState::WaitingPhrase) {
+    LOG_WARN << "[registration] savePhrase: invalid state for chat="
+             << chatId;
     co_return;
   }
 
+  LOG_INFO << "[registration] Saved phrase chat=" << chatId
+           << " len=" << phrase.size();
   row->setPhrase(std::move(phrase));
   row->setState(rawValue(RegistrationState::Completed));
   co_await _repository.update(*row);
@@ -272,6 +333,7 @@ RegistrationWorkflow::savePhrase(int64_t chatId, std::string phrase) {
 }
 
 drogon::Task<void> RegistrationWorkflow::completeFormCreation(int64_t chatId) {
+  LOG_INFO << "[registration] Registration COMPLETED chat=" << chatId;
   _bot.getApi().sendMessage(chatId, std::string(Strings::ThankYouMessageText));
   co_return;
 }
