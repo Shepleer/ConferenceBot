@@ -1,15 +1,20 @@
 #include <string>
+#include <thread>
 
 #include <ConferenceBot/BotServer/BotServer.hpp>
 #include <ConferenceBot/BotServer/ConferenceBotController.hpp>
 #include <ConferenceBot/BotServer/DbClientFactory.hpp>
 #include <ConferenceBot/Config/ConfigProvider.hpp>
 #include <ConferenceBot/Controllers/ExportController.hpp>
+#include <ConferenceBot/Net/DrogonHttpClient.hpp>
 
 #include <drogon/drogon.h>
 #include <tgbot/tgbot.h>
 
 namespace {
+
+constexpr uint16_t kWebhookPort = 8080;
+constexpr uint16_t kExportPort = 8081;
 
 trantor::Logger::LogLevel resolveLogLevel() {
   const char *envLevel = std::getenv("LOG_LEVEL");
@@ -42,7 +47,9 @@ int main() {
 
   const ConferenceBot::Config config =
       ConferenceBot::ConfigProvider::getConfig();
-  TgBot::Bot bot(config.botToken);
+
+  ConferenceBot::DrogonHttpClient httpClient;
+  TgBot::Bot bot(config.botToken, httpClient);
 
   auto dbClient = ConferenceBot::DbClientFactory::make();
   if (!dbClient) {
@@ -58,6 +65,41 @@ int main() {
 
   botController->registerHandlers();
   LOG_INFO << "[main] Bot handlers registered.";
+
+  ConferenceBot::BotServer botServer(bot, config);
+
+  TgBot::TgTypeParser tgTypeParser;
+  const std::string webhookPath = botServer.webhookPath();
+
+  drogon::app().registerHandler(
+      webhookPath,
+      [&bot,
+       &tgTypeParser](
+          const drogon::HttpRequestPtr &request,
+          std::function<void(const drogon::HttpResponsePtr &)> &&callback
+      ) {
+        auto ack = drogon::HttpResponse::newHttpResponse();
+        ack->setStatusCode(drogon::HttpStatusCode::k200OK);
+        callback(ack);
+
+        std::string body{request->getBody()};
+        drogon::async_run(
+            [&bot, &tgTypeParser, body = std::move(body)]() -> drogon::Task<> {
+              try {
+                auto update = tgTypeParser.parseJsonAndGetUpdate(
+                    tgTypeParser.parseJson(body)
+                );
+                bot.getEventHandler().handleUpdate(update);
+              } catch (const std::exception &e) {
+                LOG_ERROR << "[webhook] Failed to handle update: " << e.what();
+              }
+              co_return;
+            }
+        );
+      },
+      {drogon::Post}
+  );
+  LOG_INFO << "[main] Webhook route registered at POST " << webhookPath;
 
   auto exportController =
       ConferenceBot::ExportController(dbClient, config.exportToken);
@@ -80,24 +122,26 @@ int main() {
   );
   LOG_INFO << "[main] HTTP route '/export' registered.";
 
+  drogon::app().registerBeginningAdvice([&botServer] {
+    std::thread([&botServer] { botServer.registerWebhook(); }).detach();
+  });
+
   signal(SIGINT, [](int) {
     LOG_WARN << "[main] SIGINT received, shutting down.";
-    exit(0);
+    drogon::app().quit();
   });
   signal(SIGTERM, [](int) {
     LOG_WARN << "[main] SIGTERM received, shutting down.";
-    exit(0);
+    drogon::app().quit();
   });
 
-  std::thread webThread([]() {
-    LOG_INFO << "[http] Drogon HTTP server listening on 0.0.0.0:8081";
-    drogon::app().addListener("0.0.0.0", 8081).run();
-  });
-
-  ConferenceBot::BotServer server(bot, config);
-  server.start();
-
-  webThread.join();
+  LOG_INFO << "[http] Drogon HTTP server listening on 0.0.0.0:"
+           << kWebhookPort << " (webhook) and 0.0.0.0:" << kExportPort
+           << " (export)";
+  drogon::app()
+      .addListener("0.0.0.0", kWebhookPort)
+      .addListener("0.0.0.0", kExportPort)
+      .run();
 
   LOG_INFO << "[main] Shutdown complete.";
   return 0;
