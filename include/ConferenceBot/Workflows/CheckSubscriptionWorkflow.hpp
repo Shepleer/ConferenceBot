@@ -1,5 +1,6 @@
 #pragma once
 
+#include <drogon/drogon.h>
 #include <tgbot/Bot.h>
 
 namespace ConferenceBot {
@@ -7,7 +8,7 @@ class CheckSubscriptionWorkflow {
 public:
   explicit CheckSubscriptionWorkflow(TgBot::Bot &bot)
       : _bot(bot) {}
-  void checkSubscription(
+  drogon::Task<void> checkSubscription(
       const TgBot::CallbackQuery::Ptr &query,
       const std::string_view channelId
   );
@@ -15,7 +16,8 @@ public:
 private:
   TgBot::Bot &_bot;
 
-  void showSubscribedUI(const TgBot::CallbackQuery::Ptr &query);
-  void showNotSubscribedUI(const TgBot::CallbackQuery::Ptr &query);
+  drogon::Task<void> showSubscribedUI(const TgBot::CallbackQuery::Ptr &query);
+  drogon::Task<void>
+  showNotSubscribedUI(const TgBot::CallbackQuery::Ptr &query);
 };
 } // namespace ConferenceBot

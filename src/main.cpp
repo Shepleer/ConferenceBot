@@ -17,12 +17,18 @@ trantor::Logger::LogLevel resolveLogLevel() {
     return trantor::Logger::kInfo;
   }
   const std::string level(envLevel);
-  if (level == "TRACE") return trantor::Logger::kTrace;
-  if (level == "DEBUG") return trantor::Logger::kDebug;
-  if (level == "INFO") return trantor::Logger::kInfo;
-  if (level == "WARN") return trantor::Logger::kWarn;
-  if (level == "ERROR") return trantor::Logger::kError;
-  if (level == "FATAL") return trantor::Logger::kFatal;
+  if (level == "TRACE")
+    return trantor::Logger::kTrace;
+  if (level == "DEBUG")
+    return trantor::Logger::kDebug;
+  if (level == "INFO")
+    return trantor::Logger::kInfo;
+  if (level == "WARN")
+    return trantor::Logger::kWarn;
+  if (level == "ERROR")
+    return trantor::Logger::kError;
+  if (level == "FATAL")
+    return trantor::Logger::kFatal;
   return trantor::Logger::kInfo;
 }
 
@@ -30,6 +36,7 @@ trantor::Logger::LogLevel resolveLogLevel() {
 
 int main() {
   drogon::app().setLogLevel(resolveLogLevel());
+  drogon::app().setThreadNum(0);
 
   LOG_INFO << "[main] Starting ConferenceBot...";
 
@@ -44,7 +51,9 @@ int main() {
   }
 
   auto botController = std::make_shared<ConferenceBot::ConferenceBotController>(
-      bot, dbClient, config
+      bot,
+      dbClient,
+      config
   );
 
   botController->registerHandlers();
@@ -59,7 +68,8 @@ int main() {
           const drogon::HttpRequestPtr &request,
           std::function<void(const drogon::HttpResponsePtr &)> &&callback
       ) {
-        LOG_INFO << "[http] GET /export from " << request->getPeerAddr().toIpPort();
+        LOG_INFO << "[http] GET /export from "
+                 << request->getPeerAddr().toIpPort();
         drogon::async_run([exportController,
                            request,
                            callback = std::move(callback)]() mutable {

@@ -29,7 +29,9 @@ void ConferenceBotController::registerHandlers() {
       Callbacks::CheckSubscriptionCallbackData,
       [this](const TgBot::CallbackQuery::Ptr query) {
         LOG_DEBUG << "[controller] Routing 'check_subscription' callback";
-        _checkSubscriptionWorkflow.checkSubscription(query, _config.channelId);
+        drogon::async_run([this, query] {
+            return _checkSubscriptionWorkflow.checkSubscription(query, _config.channelId);
+        });
       }
   );
 

@@ -3,8 +3,6 @@
 #include <ConferenceBot/Keyboards/Keyboards.hpp>
 #include <ConferenceBot/Resources/Strings.hpp>
 
-#include <drogon/drogon.h>
-
 namespace {
 bool isSubscribed(const TgBot::ChatMember::Ptr &member) {
   const std::string &status = member->status;
@@ -15,7 +13,7 @@ bool isSubscribed(const TgBot::ChatMember::Ptr &member) {
 
 namespace ConferenceBot {
 
-void CheckSubscriptionWorkflow::showNotSubscribedUI(
+drogon::Task<void> CheckSubscriptionWorkflow::showNotSubscribedUI(
     const TgBot::CallbackQuery::Ptr &query
 ) {
   LOG_INFO << "[subscription] User user=" << query->from->id
@@ -24,9 +22,11 @@ void CheckSubscriptionWorkflow::showNotSubscribedUI(
       query->id,
       std::string(Strings::YouNotSubcribedMessageText)
   );
+
+  co_return;
 }
 
-void CheckSubscriptionWorkflow::showSubscribedUI(
+drogon::Task<void> CheckSubscriptionWorkflow::showSubscribedUI(
     const TgBot::CallbackQuery::Ptr &query
 ) {
   const std::int64_t chatId = query->message->chat->id;
@@ -54,9 +54,11 @@ void CheckSubscriptionWorkflow::showSubscribedUI(
       nullptr,
       keyboard
   );
+
+  co_return;
 }
 
-void CheckSubscriptionWorkflow::checkSubscription(
+drogon::Task<void> CheckSubscriptionWorkflow::checkSubscription(
     const TgBot::CallbackQuery::Ptr &query,
     const std::string_view channelId
 ) {
@@ -69,9 +71,9 @@ void CheckSubscriptionWorkflow::checkSubscription(
     LOG_DEBUG << "[subscription] user=" << userId
               << " status=" << member->status;
     if (isSubscribed(member)) {
-      showSubscribedUI(query);
+      co_await showSubscribedUI(query);
     } else {
-      showNotSubscribedUI(query);
+      co_await showNotSubscribedUI(query);
     }
   } catch (const TgBot::TgException &e) {
     LOG_ERROR << "[subscription] Telegram error checking user=" << userId
