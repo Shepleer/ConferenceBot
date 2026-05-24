@@ -46,7 +46,7 @@ target_include_directories(
 target_compile_features(
     ConferenceBot
     PRIVATE
-    cxx_std_26
+    cxx_std_23
 )
 
 
