@@ -26,7 +26,7 @@ namespace ConferenceBot {
 namespace {
 
 std::string buildHostKey(const std::string &protocol, const std::string &host) {
-  return protocol + host;
+  return protocol + "://" + host;
 }
 
 std::string buildFormUrlEncodedBody(
@@ -114,7 +114,7 @@ drogon::HttpClientPtr DrogonHttpClient::getOrCreateClient(
   }
 
   auto client = drogon::HttpClient::newHttpClient(
-      protocol + host,
+      protocol + "://" + host,
       _loopThread->getLoop()
   );
   client->setUserAgent("ConferenceBot/1.0");
