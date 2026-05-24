@@ -1,0 +1,7 @@
+{
+    "db_clients": {
+        "name": "default",
+        "rdbms": "sqlite3",
+        "filename": "conference.db"
+    }
+}

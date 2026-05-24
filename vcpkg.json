@@ -1,0 +1,11 @@
+{
+    "name": "conference-bot",
+    "version": "1.0.0",
+    "dependencies": [
+        {
+            "name": "drogon",
+            "features": ["sqlite3"]
+        },
+        "tgbot-cpp"
+    ]
+}

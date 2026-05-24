@@ -1,0 +1,12 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+ColumnLimit: 80
+BreakConstructorInitializers: BeforeComma
+ConstructorInitializerIndentWidth: 4
+BinPackArguments: false
+BinPackParameters: false
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortLambdasOnASingleLine: All
+AllowShortFunctionsOnASingleLine: All
+AlignAfterOpenBracket: BlockIndent

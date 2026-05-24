@@ -1,0 +1,38 @@
+# Build output
+build/
+cmake-build-*/
+
+# vcpkg installed packages (fetched at build time)
+vcpkg_installed/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+install_manifest.txt
+CTestTestfile.cmake
+*.ninja
+
+# Compiled binary
+ConferenceBot
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Secrets & local config
+.env
+
+# User uploads / generated assets
+uploads/
+
+# macOS
+.DS_Store
+
+# IDE
+.cache/
+.idea/
+.vscode/
+*.user

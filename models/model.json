@@ -1,0 +1,7 @@
+{
+    "rdbms": "sqlite3",
+    "filename": "conference.db",
+    "tables": [
+        "registrations"
+    ]
+}
