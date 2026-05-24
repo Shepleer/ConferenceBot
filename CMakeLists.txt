@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(drogon CONFIG REQUIRED)
+find_package(Drogon CONFIG REQUIRED)
 find_package(TgBot CONFIG REQUIRED)
 
 file(

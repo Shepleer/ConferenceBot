@@ -55,9 +55,9 @@ void ConferenceBotController::registerHandlers() {
       }
   );
 
-  _bot.getEvents().onAnyMessage([this](TgBot::Message::Ptr message) {
+  _bot.getEvents().onNonCommandMessage([this](TgBot::Message::Ptr message) {
     if (message->chat->type != TgBot::Chat::Type::Private ||
-        message->text.empty() || message->text.starts_with("/")) {
+        message->text.empty()) {
       return;
     }
 
