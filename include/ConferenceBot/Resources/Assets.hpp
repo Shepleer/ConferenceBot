@@ -4,7 +4,7 @@
 
 namespace ConferenceBot::Assets {
 
-inline constexpr std::string asset(std::string_view path) {
+inline std::string asset(std::string_view path) {
   return (std::filesystem::path(ASSETS_DIR) / path).string();
 };
 
