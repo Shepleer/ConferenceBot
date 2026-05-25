@@ -111,22 +111,23 @@ drogon::Task<void> RegistrationWorkflow::answerWantParticipateQuery(
       );
     });
 
-    std::vector<TgBot::InputMedia::Ptr> documents;
+    std::vector<TgBot::InputMedia::Ptr> photos;
     std::ranges::transform(
         Constants::CONTEST_FILE_IDS,
-        std::back_inserter(documents),
+        std::back_inserter(photos),
         [](const auto &fileId) {
-          auto document = std::make_shared<TgBot::InputMediaPhoto>();
-          document->media = fileId;
-          return document;
+          auto photo = std::make_shared<TgBot::InputMediaPhoto>();
+          photo->media = fileId;
+          photo->hasSpoiler = false;
+          return photo;
         }
     );
 
     co_await onBotPool([&] {
-      _bot.getApi().sendMediaGroup(chatId, documents);
+      _bot.getApi().sendMediaGroup(chatId, photos);
     });
     LOG_DEBUG << "[registration] Sent contest media group (count="
-              << documents.size() << ") to chat=" << chatId;
+              << photos.size() << ") to chat=" << chatId;
 
     co_await requestFullName(chatId, username);
   } catch (const TgBot::TgException &e) {

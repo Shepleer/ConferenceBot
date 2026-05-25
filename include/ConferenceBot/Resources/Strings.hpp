@@ -4,8 +4,8 @@
 namespace ConferenceBot::Strings {
 
 inline constexpr std::string_view BotStartMessageText =
-    "Привет!\n"
-    "Вы попали в бот студии разработки корпоративного мерча SATOSHI merch 🌪️\n"
+    "Привет!\n\n"
+    "Вы попали в бот студии разработки корпоративного мерча SATOSHI merch 🌪️\n\n"
     "Для участников MAC 2026 мы подготовили несколько активностей,"
     "чтобы принять участие подпишитесь на наш <a href=\"https://t.me/SATOSHI_mrch\">tg-канал</a> и нажмите “Готово”.\n";
 
@@ -22,9 +22,9 @@ inline constexpr std::string_view YouNotSubcribedMessageText =
     "А подписаться… 👉👈";
 
 inline constexpr std::string_view SubscriptionConfirmedMessageText =
-    "Супер! Теперь вы можете\n"
+    "Супер! Теперь вы можете\n\n"
     "1. Показать подписку нашему менеджеру и вытянуть печенье с "
-    "бизнес-предсказанием ;)\n"
+    "бизнес-предсказанием ;)\n\n"
     "2. Поучаствовать в конкурсе концептуальных фраз для affiliate мерча и "
     "выиграть одно из изделий SATOSHI с собственным брендингом.\n";
 
@@ -39,7 +39,7 @@ inline constexpr std::string_view ContestDescriptionMessageText =
     "авторов.";
 
 inline constexpr std::string_view ThankYouMessageText =
-    "Результаты будут размещены в нашем <a href=\"https://t.me/SATOSHI_mrch\">канале</a> 28.05 во второй половине дня,"
+    "Результаты будут размещены в нашем <a href=\"https://t.me/SATOSHI_mrch\">канале</a> 28.05 во второй половине дня,\n\n"
     "а с победителями конкурса мы свяжемся лично в Telegram для уточнения "
     "деталей.\n";
 

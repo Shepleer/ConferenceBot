@@ -25,21 +25,14 @@ drogon::Task<void> StartWorkflow::replyStartCommand(int64_t chatId) {
     TgBot::InlineKeyboardMarkup::Ptr keyboard =
         Keyboards::makeCheckSubscriptionKeyboard();
     co_await onBotPool([&] {
-      _bot.getApi().sendMessage(
-          chatId,
-          std::string(Strings::BotStartMessageText),
-          nullptr,
-          nullptr,
-          keyboard,
-          "HTML"
-      );
-    });
-
-    co_await onBotPool([&] {
       return _bot.getApi().sendPhoto(
           chatId,
           "AgACAgIAAxkDAAIBX2oS_yvHm862H-ydLpWN6pFRgtGqAAJ0HGsboJ-"
-          "ZSMk78efXcvu8AQADAgADdwADOwQ"
+          "ZSMk78efXcvu8AQADAgADdwADOwQ",
+          std::string(Strings::BotStartMessageText),
+          nullptr,
+          keyboard,
+          "HTML"
       );
     });
 
