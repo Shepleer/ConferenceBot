@@ -61,4 +61,7 @@ inline constexpr std::string_view RegistrationFormTemplate =
 inline constexpr std::string_view RegistrationFormEmptyFieldPlacehplderText =
     "[Waiting]";
 
+inline constexpr std::string_view FormOutdatedMessageText =
+    "Эта форма устарела, используйте актуальную ниже";
+
 } // namespace ConferenceBot::Strings

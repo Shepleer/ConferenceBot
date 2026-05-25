@@ -12,6 +12,26 @@
 namespace ConferenceBot {
 namespace {
 
+std::string
+buildFormText(const drogon_model::sqlite3::Registrations &row) {
+  const std::string name = row.getValueOfName();
+  const std::string companyName = row.getValueOfCompany();
+  const std::string companyPosition = row.getValueOfCompanyPosition();
+  const std::string phrase = row.getValueOfPhrase();
+
+  return std::format(
+      Strings::RegistrationFormTemplate,
+      name.empty() ? Strings::RegistrationFormEmptyFieldPlacehplderText : name,
+      companyName.empty() ? Strings::RegistrationFormEmptyFieldPlacehplderText
+                          : companyName,
+      companyPosition.empty()
+          ? Strings::RegistrationFormEmptyFieldPlacehplderText
+          : companyPosition,
+      phrase.empty() ? Strings::RegistrationFormEmptyFieldPlacehplderText
+                     : phrase
+  );
+}
+
 drogon::Task<void> showFormPrompt(
     TgBot::Bot &bot,
     RegistrationRepository &repository,
@@ -28,26 +48,9 @@ drogon::Task<void> showFormPrompt(
   }
 
   row->setState(rawValue(state));
-
-  std::string name = row->getValueOfName();
-  std::string companyName = row->getValueOfCompany();
-  std::string companyPosition = row->getValueOfCompanyPosition();
-  std::string phrase = row->getValueOfPhrase();
-
   co_await repository.update(*row);
 
-  const auto formText = std::format(
-      Strings::RegistrationFormTemplate,
-      name.empty() ? Strings::RegistrationFormEmptyFieldPlacehplderText : name,
-      companyName.empty() ? Strings::RegistrationFormEmptyFieldPlacehplderText
-                          : companyName,
-      companyPosition.empty()
-          ? Strings::RegistrationFormEmptyFieldPlacehplderText
-          : companyPosition,
-      phrase.empty() ? Strings::RegistrationFormEmptyFieldPlacehplderText
-                     : row->getValueOfPhrase()
-  );
-
+  const auto formText = buildFormText(*row);
   auto keyboard = canGoBack(state) ? Keyboards::formBackKeyboard() : nullptr;
 
   bot.getApi().editMessageText(
@@ -162,13 +165,35 @@ RegistrationWorkflow::processMessage(TgBot::Message::Ptr message) {
 drogon::Task<void>
 RegistrationWorkflow::replyBackQuery(TgBot::CallbackQuery::Ptr query) {
   using enum RegistrationState;
+
+  if (!query || !query->message || !query->message->chat) {
+    LOG_WARN << "[registration] replyBackQuery: malformed callback query";
+    co_return;
+  }
+
   const int64_t chatId = query->message->chat->id;
+  const int64_t clickedMessageId = query->message->messageId;
+
   auto row = co_await _repository.findByChatId(chatId);
 
   if (!row) {
     LOG_WARN << "[registration] replyBackQuery: no row for chat=" << chatId;
+    _bot.getApi().answerCallbackQuery(query->id);
     co_return;
   }
+
+  if (clickedMessageId != row->getValueOfMessageId()) {
+    LOG_INFO << "[registration] replyBackQuery: stale form click chat="
+             << chatId << " clicked=" << clickedMessageId
+             << " current=" << row->getValueOfMessageId();
+    _bot.getApi().answerCallbackQuery(
+        query->id,
+        std::string(Strings::FormOutdatedMessageText)
+    );
+    co_return;
+  }
+
+  _bot.getApi().answerCallbackQuery(query->id);
 
   RegistrationState state = getState(*row);
   if (!canGoBack(state)) {
@@ -202,8 +227,75 @@ RegistrationWorkflow::replyBackQuery(TgBot::CallbackQuery::Ptr query) {
 drogon::Task<void> RegistrationWorkflow::resumeRegistration(
     drogon_model::sqlite3::Registrations &model
 ) {
-  auto state = getState(model);
-  co_return;
+  using enum RegistrationState;
+
+  const int64_t chatId = model.getValueOfChatId();
+
+  RegistrationState state;
+  try {
+    state = getState(model);
+  } catch (const std::exception &e) {
+    LOG_ERROR << "[registration] resumeRegistration: invalid state for chat="
+              << chatId << " raw=" << model.getValueOfState() << ": "
+              << e.what();
+    co_return;
+  }
+
+  LOG_INFO << "[registration] resumeRegistration chat=" << chatId
+           << " state=" << rawValue(state);
+
+  if (state == Completed) {
+    LOG_DEBUG << "[registration] resumeRegistration: already completed chat="
+              << chatId;
+    _bot.getApi().sendMessage(
+        chatId,
+        std::string(Strings::ThankYouMessageText),
+        nullptr,
+        nullptr,
+        nullptr,
+        "HTML"
+    );
+    co_return;
+  }
+
+  const int64_t staleMessageId = model.getValueOfMessageId();
+  if (staleMessageId != 0) {
+    try {
+      _bot.getApi().editMessageReplyMarkup(
+          chatId,
+          staleMessageId,
+          "",
+          nullptr
+      );
+    } catch (const TgBot::TgException &e) {
+      LOG_DEBUG << "[registration] resumeRegistration: could not clear "
+                   "keyboard on stale message="
+                << staleMessageId << " chat=" << chatId << ": " << e.what();
+    }
+  }
+
+  try {
+    const auto formText = buildFormText(model);
+    auto keyboard = canGoBack(state) ? Keyboards::formBackKeyboard() : nullptr;
+
+    auto sent = _bot.getApi().sendMessage(
+        chatId,
+        formText,
+        nullptr,
+        nullptr,
+        keyboard
+    );
+
+    model.setMessageId(sent->messageId);
+    co_await _repository.update(model);
+
+    _bot.getApi().sendMessage(chatId, std::string(prompt(state)));
+    LOG_DEBUG << "[registration] resumeRegistration: re-sent form chat="
+              << chatId << " messageId=" << sent->messageId;
+  } catch (const TgBot::TgException &e) {
+    LOG_ERROR << "[registration] Telegram error in resumeRegistration chat="
+              << chatId << ": " << e.what();
+  }
 }
 
 drogon::Task<void>
