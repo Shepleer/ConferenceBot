@@ -16,6 +16,10 @@
 #include <drogon/utils/Utilities.h>
 #include <trantor/utils/Logger.h>
 
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -24,10 +28,6 @@
 
 namespace ConferenceBot {
 namespace {
-
-std::string buildHostKey(const std::string &protocol, const std::string &host) {
-  return protocol + "://" + host;
-}
 
 std::string buildFormUrlEncodedBody(
     const std::vector<TgBot::HttpReqArg> &args
@@ -88,46 +88,75 @@ DrogonHttpClient::DrogonHttpClient()
       ) {
   _loopThread->run();
   LOG_INFO << "[http-client] DrogonHttpClient initialised on dedicated loop "
-              "thread 'TgBotHttpLoop'";
+              "thread 'TgBotHttpLoop' (pool size per host = "
+           << kPoolSize << ")";
 }
 
 DrogonHttpClient::~DrogonHttpClient() {
   {
-    std::lock_guard<std::mutex> lock(_clientsMutex);
-    _clients.clear();
+    std::lock_guard<std::mutex> lock(_poolsMutex);
+    _pools.clear();
   }
   if (_loopThread && _loopThread->getLoop()) {
     _loopThread->getLoop()->quit();
   }
 }
 
-drogon::HttpClientPtr DrogonHttpClient::getOrCreateClient(
+void DrogonHttpClient::applyKeepAlive(int fd) {
+  int yes = 1;
+  if (::setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(yes)) != 0) {
+    LOG_WARN << "[http-client] SO_KEEPALIVE failed (errno=" << errno << ")";
+    return;
+  }
+
+#if defined(__linux__)
+  int idle = 60;
+  int intvl = 10;
+  int cnt = 3;
+  ::setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+  ::setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
+  ::setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
+#elif defined(__APPLE__)
+  int idle = 60;
+  ::setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle));
+#endif
+}
+
+drogon::HttpClientPtr DrogonHttpClient::leaseClient(
     const std::string &protocol,
     const std::string &host
 ) const {
-  const std::string key = buildHostKey(protocol, host);
+  const std::string key = protocol + "://" + host;
 
-  std::lock_guard<std::mutex> lock(_clientsMutex);
-  auto it = _clients.find(key);
-  if (it != _clients.end()) {
-    return it->second;
+  std::lock_guard<std::mutex> lock(_poolsMutex);
+  auto it = _pools.find(key);
+  if (it == _pools.end()) {
+    std::vector<drogon::HttpClientPtr> pool;
+    pool.reserve(kPoolSize);
+    for (std::size_t i = 0; i < kPoolSize; ++i) {
+      auto client = drogon::HttpClient::newHttpClient(
+          protocol + "://" + host,
+          _loopThread->getLoop()
+      );
+      client->setUserAgent("ConferenceBot/1.0");
+      client->setSockOptCallback(&DrogonHttpClient::applyKeepAlive);
+      pool.push_back(std::move(client));
+    }
+    LOG_INFO << "[http-client] Created connection pool for " << key
+             << " (size=" << kPoolSize << ")";
+    it = _pools.emplace(key, std::move(pool)).first;
   }
 
-  auto client = drogon::HttpClient::newHttpClient(
-      protocol + "://" + host,
-      _loopThread->getLoop()
-  );
-  client->setUserAgent("ConferenceBot/1.0");
-  _clients.emplace(key, client);
-  LOG_INFO << "[http-client] Created persistent HTTP client for " << key;
-  return client;
+  const std::size_t index = _roundRobin.fetch_add(1, std::memory_order_relaxed)
+                            % it->second.size();
+  return it->second[index];
 }
 
 std::string DrogonHttpClient::makeRequest(
     const TgBot::Url &url,
     const std::vector<TgBot::HttpReqArg> &args
 ) const {
-  auto client = getOrCreateClient(url.protocol, url.host);
+  auto client = leaseClient(url.protocol, url.host);
 
   auto request = drogon::HttpRequest::newHttpRequest();
   std::string path = url.path;
