@@ -5,12 +5,13 @@
 namespace ConferenceBot {
 drogon::orm::DbClientPtr DbClientFactory::make() {
   constexpr const char *kDbFile = "conference.db";
+  constexpr std::size_t kPoolSize = 16;
   LOG_INFO << "[db] Creating SQLite3 client (file=" << kDbFile
-           << ", pool=4)";
+           << ", pool=" << kPoolSize << ")";
 
   auto client = drogon::orm::DbClient::newSqlite3Client(
       std::format("filename={}", kDbFile),
-      4
+      kPoolSize
   );
 
   if (client) {

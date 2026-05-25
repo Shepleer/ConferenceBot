@@ -40,7 +40,7 @@ namespace ConferenceBot {
 class DrogonHttpClient final : public TgBot::HttpClient {
 public:
   /// Number of parallel persistent connections kept per remote host.
-  static constexpr std::size_t kPoolSize = 16;
+  static constexpr std::size_t kPoolSize = 32;
 
   DrogonHttpClient();
   ~DrogonHttpClient() override;

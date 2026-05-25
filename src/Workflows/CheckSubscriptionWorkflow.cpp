@@ -1,6 +1,7 @@
 #include <ConferenceBot/Workflows/CheckSubscriptionWorkflow.hpp>
 
 #include <ConferenceBot/Keyboards/Keyboards.hpp>
+#include <ConferenceBot/Net/BotApiExecutor.hpp>
 #include <ConferenceBot/Resources/Strings.hpp>
 
 namespace {
@@ -18,44 +19,53 @@ drogon::Task<void> CheckSubscriptionWorkflow::showNotSubscribedUI(
 ) {
   LOG_INFO << "[subscription] User user=" << query->from->id
            << " is NOT subscribed";
-  _bot.getApi().answerCallbackQuery(
-      query->id,
-      std::string(Strings::YouNotSubcribedMessageText)
-  );
-
-  co_return;
+  const std::string queryId = query->id;
+  co_await onBotPool([&] {
+    _bot.getApi().answerCallbackQuery(
+        queryId,
+        std::string(Strings::YouNotSubcribedMessageText)
+    );
+  });
 }
 
 drogon::Task<void> CheckSubscriptionWorkflow::showSubscribedUI(
     const TgBot::CallbackQuery::Ptr &query
 ) {
   const std::int64_t chatId = query->message->chat->id;
+  const std::string queryId = query->id;
+  const int32_t messageId = query->message->messageId;
+  const std::string inlineMessageId = query->inlineMessageId;
+
   LOG_INFO << "[subscription] User user=" << query->from->id
            << " IS subscribed (chat=" << chatId << ")";
 
-  _bot.getApi().editMessageReplyMarkup(
-      chatId,
-      query->message->messageId,
-      query->inlineMessageId,
-      nullptr
-  );
+  co_await onBotPool([&] {
+    _bot.getApi().editMessageReplyMarkup(
+        chatId,
+        messageId,
+        inlineMessageId,
+        nullptr
+    );
+  });
 
-  _bot.getApi().answerCallbackQuery(
-      query->id,
-      std::string(Strings::YouSubcribedMessageText)
-  );
+  co_await onBotPool([&] {
+    _bot.getApi().answerCallbackQuery(
+        queryId,
+        std::string(Strings::YouSubcribedMessageText)
+    );
+  });
 
   auto keyboard = ConferenceBot::Keyboards::wantParticipateKeyboard();
 
-  _bot.getApi().sendMessage(
-      chatId,
-      std::string(Strings::SubscriptionConfirmedMessageText),
-      nullptr,
-      nullptr,
-      keyboard
-  );
-
-  co_return;
+  co_await onBotPool([&] {
+    _bot.getApi().sendMessage(
+        chatId,
+        std::string(Strings::SubscriptionConfirmedMessageText),
+        nullptr,
+        nullptr,
+        keyboard
+    );
+  });
 }
 
 drogon::Task<void> CheckSubscriptionWorkflow::checkSubscription(
@@ -63,11 +73,13 @@ drogon::Task<void> CheckSubscriptionWorkflow::checkSubscription(
     const std::string_view channelId
 ) {
   const int64_t userId = query->from ? query->from->id : 0;
+  const std::string channel{channelId};
   LOG_INFO << "[subscription] Checking subscription for user=" << userId
-           << " in channel=" << channelId;
+           << " in channel=" << channel;
   try {
-    const auto member =
-        _bot.getApi().getChatMember(std::string(channelId), query->from->id);
+    const auto member = co_await onBotPool([&] {
+      return _bot.getApi().getChatMember(channel, userId);
+    });
     LOG_DEBUG << "[subscription] user=" << userId
               << " status=" << member->status;
     if (isSubscribed(member)) {
@@ -77,7 +89,7 @@ drogon::Task<void> CheckSubscriptionWorkflow::checkSubscription(
     }
   } catch (const TgBot::TgException &e) {
     LOG_ERROR << "[subscription] Telegram error checking user=" << userId
-              << " in channel=" << channelId << ": " << e.what();
+              << " in channel=" << channel << ": " << e.what();
   }
 }
 

@@ -41,7 +41,7 @@ trantor::Logger::LogLevel resolveLogLevel() {
 
 int main() {
   drogon::app().setLogLevel(resolveLogLevel());
-  drogon::app().setThreadNum(0);
+  drogon::app().setThreadNum(16);
 
   LOG_INFO << "[main] Starting ConferenceBot...";
 
