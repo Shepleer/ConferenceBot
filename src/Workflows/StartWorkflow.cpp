@@ -19,8 +19,7 @@ drogon::Task<void> StartWorkflow::replyStartCommand(int64_t chatId) {
       co_return;
     }
 
-    LOG_INFO << "[start] New session - sending welcome flow to chat="
-             << chatId;
+    LOG_INFO << "[start] New session - sending welcome flow to chat=" << chatId;
 
     TgBot::InlineKeyboardMarkup::Ptr keyboard =
         Keyboards::makeCheckSubscriptionKeyboard();

@@ -72,8 +72,8 @@ drogon::Task<void> RegistrationWorkflow::answerWantParticipateQuery(
   const int64_t chatId = query->message->chat->id;
   const int64_t userId = query->from ? query->from->id : 0;
   LOG_INFO << "[registration] 'want participate' chat=" << chatId
-           << " user=" << userId
-           << " (@" << (query->from ? query->from->username : "") << ")";
+           << " user=" << userId << " (@"
+           << (query->from ? query->from->username : "") << ")";
 
   try {
     _bot.getApi().answerCallbackQuery(query->id);
@@ -97,7 +97,7 @@ drogon::Task<void> RegistrationWorkflow::answerWantParticipateQuery(
         Constants::CONTEST_FILE_IDS,
         std::back_inserter(documents),
         [](const auto &fileId) {
-          auto document = std::make_shared<TgBot::InputMediaDocument>();
+          auto document = std::make_shared<TgBot::InputMediaPhoto>();
           document->media = fileId;
           return document;
         }
@@ -178,8 +178,8 @@ RegistrationWorkflow::replyBackQuery(TgBot::CallbackQuery::Ptr query) {
   }
 
   RegistrationState newState = prev(state);
-  LOG_INFO << "[registration] Going back chat=" << chatId << " from="
-           << rawValue(state) << " to=" << rawValue(newState);
+  LOG_INFO << "[registration] Going back chat=" << chatId
+           << " from=" << rawValue(state) << " to=" << rawValue(newState);
   row->setState(rawValue(newState));
   switch (newState) {
   case WaitingName:
@@ -312,8 +312,7 @@ drogon::Task<void>
 RegistrationWorkflow::savePhrase(int64_t chatId, std::string phrase) {
   auto row = co_await _repository.findByChatId(chatId);
   if (!row || getState(*row) != RegistrationState::WaitingPhrase) {
-    LOG_WARN << "[registration] savePhrase: invalid state for chat="
-             << chatId;
+    LOG_WARN << "[registration] savePhrase: invalid state for chat=" << chatId;
     co_return;
   }
 
@@ -334,7 +333,14 @@ RegistrationWorkflow::savePhrase(int64_t chatId, std::string phrase) {
 
 drogon::Task<void> RegistrationWorkflow::completeFormCreation(int64_t chatId) {
   LOG_INFO << "[registration] Registration COMPLETED chat=" << chatId;
-  _bot.getApi().sendMessage(chatId, std::string(Strings::ThankYouMessageText));
+  _bot.getApi().sendMessage(
+      chatId,
+      std::string(Strings::ThankYouMessageText),
+      nullptr,
+      nullptr,
+      nullptr,
+      "HTML"
+  );
   co_return;
 }
 

@@ -6,11 +6,10 @@ inline const std::vector<std::string> ALLOWED_UPDATES =
     {"message", "callback_query", "chat_member"};
 
 inline const std::vector<std::string> CONTEST_FILE_IDS = {
-    "BQACAgIAAxkDAAIBf2oTEV8kbxu-r5IKgKiqjEun7fXsAAKVmQACoJ-ZSLwJ194cbvpsOwQ",
-    "BQACAgIAAxkDAAIBgGoTEWPc8KyzfhUXmoumbv5_af9WAAKWmQACoJ-ZSApHU0PtWRSDOwQ",
-    "BQACAgIAAxkDAAIBgWoTEWV8y21Bfwt7khpoKNwLEzIiAAKXmQACoJ-ZSBsgOqeKtYIDOwQ",
-    "BQACAgIAAxkDAAIBgmoTEWVg63jltqQKyQABpwSVzzO4oQACmJkAAqCfmUiD1otWqJY0tzsE",
-    "BQACAgIAAxkDAAIBg2oTEWaogWOy8Ls9YHMywjEzWPcvAAKZmQACoJ-ZSEPQDDWeXtVzOwQ"
+    "AgACAgIAAxkDAAICA2oTpsVxgJK8qlg_c2cDBG1F0WnXAAIRFmsboJ-hSMnDR_feVsUcAQADAgADdwADOwQ",
+    "AgACAgIAAxkDAAICBGoTpsc8MczftEGn0t3G_f9C8okuAAISFmsboJ-hSIRKiMZTJx9pAQADAgADdwADOwQ",
+    "AgACAgIAAxkDAAICBWoTpsgtatp5prPHSDKb23wvMJpBAAITFmsboJ-hSIPrEV6k8DIpAQADAgADdwADOwQ",
+    "AgACAgIAAxkDAAICBmoTpsvFfu3UV60K8DNRXuRqMgAB-AACFBZrG6CfoUjXDu2T5DMvJAEAAwIAA3cAAzsE",
 };
 
 } // namespace ConferenceBot::Constants
